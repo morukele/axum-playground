@@ -17,6 +17,7 @@ pub enum ApiResponse {
     Ok,
     Created,
     JsonData(Vec<Todo>),
+    NoContent,
 }
 
 impl IntoResponse for ApiResponse {
@@ -25,6 +26,7 @@ impl IntoResponse for ApiResponse {
             Self::Ok => StatusCode::OK.into_response(),
             Self::Created => StatusCode::CREATED.into_response(),
             Self::JsonData(data) => (StatusCode::OK, Json(data)).into_response(),
+            Self::NoContent => StatusCode::NO_CONTENT.into_response(),
         }
     }
 }

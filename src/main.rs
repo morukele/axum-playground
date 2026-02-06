@@ -1,9 +1,6 @@
-mod custom_middleware;
 mod errors;
-mod extractors;
 mod response;
 mod todo_routes;
-mod web_socket;
 
 use crate::todo_routes::{create_todo, delete_todo, edit_todo, get_todo, get_todos};
 use axum::routing::{delete, get, post, put};
@@ -24,6 +21,8 @@ fn init_router(state: Arc<AppState>) -> Router {
 pub struct AppState {
     pub db: PgPool,
 }
+
+// TODO: implement logging for the application
 
 #[tokio::main]
 async fn main() {

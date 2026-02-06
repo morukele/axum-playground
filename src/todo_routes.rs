@@ -6,7 +6,7 @@
 //! Project: axum-playground
 //!
 //! Description:
-//!
+//! Routes for the todo_handler
 
 use crate::errors::ApiError;
 use crate::response::ApiResponse;
@@ -17,6 +17,8 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use uuid::Uuid;
+
+//TODO: implement logging for the routes
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
 pub struct Todo {
@@ -50,7 +52,7 @@ pub async fn create_todo(
     Json(body): Json<CreateTodoObject>,
 ) -> Result<ApiResponse, ApiError> {
     // store item in db
-    let todo = sqlx::query_as!(
+    sqlx::query_as!(
         Todo,
         r#"
             INSERT INTO todos (id, name, description, status)
@@ -66,15 +68,103 @@ pub async fn create_todo(
     .await
     .map_err(|_| ApiError::BadRequest)?;
 
-    // return response with created todo
+    Ok(ApiResponse::Created)
+}
+
+pub async fn get_todos(State(state): State<AppState>) -> Result<ApiResponse, ApiError> {
+    let todos = sqlx::query_as!(
+        Todo,
+        r#"
+            SELECT id, name, description, status AS "status!: Status", created_at, updated_at
+            FROM todos
+        "#
+    )
+    .fetch_all(&state.db)
+    .await
+    .map_err(|_| ApiError::NotFound)?;
+
+    Ok(ApiResponse::JsonData(todos))
+}
+
+pub async fn get_todo(
+    State(state): State<AppState>,
+    Path(id): Path<Uuid>,
+) -> Result<ApiResponse, ApiError> {
+    let todo = sqlx::query_as!(
+        Todo,
+        r#"
+            SELECT id, name, description, status AS "status!: Status", created_at, updated_at
+            FROM todos
+            WHERE id = $1
+            "#,
+        id
+    )
+    .fetch_one(&state.db)
+    .await
+    .map_err(|_| ApiError::NotFound)?;
+
     Ok(ApiResponse::JsonData(vec![todo]))
 }
-pub async fn get_todos() -> Result<ApiResponse, ApiError> {
-    todo!()
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UpdateTodoObject {
+    pub name: Option<String>,
+    pub description: Option<String>,
+    pub status: Option<Status>,
 }
 
-pub async fn get_todo(Path(id): Path<Uuid>) {}
+#[axum::debug_handler]
+pub async fn edit_todo(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<Uuid>,
+    Json(body): Json<UpdateTodoObject>,
+) -> Result<ApiResponse, ApiError> {
+    // find item and update item
+    let res = sqlx::query!(
+        r#"
+            UPDATE todos
+            SET
+                name = COALESCE($1, name),
+                description = COALESCE($2, description),
+                status = COALESCE($3, status)
+            WHERE id = $4
+        "#,
+        body.name,
+        body.description,
+        body.status as Option<Status>,
+        id
+    )
+    .execute(&state.db)
+    .await
+    .map_err(|_| ApiError::NotFound)?;
 
-pub async fn edit_todo(Path(id): Path<Uuid>, Json(body): Json<Todo>) {}
+    if res.rows_affected() > 0 {
+        Ok(ApiResponse::Ok)
+    } else {
+        Err(ApiError::NotFound)
+    }
+}
 
-pub async fn delete_todo(Path(id): Path<Uuid>) {}
+#[axum::debug_handler]
+pub async fn delete_todo(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<Uuid>,
+) -> Result<ApiResponse, ApiError> {
+    // find and delete items
+    let res = sqlx::query!(
+        r#"
+            DELETE FROM todos
+            WHERE id = $1
+        "#,
+        id
+    )
+    .execute(&state.db)
+    .await
+    .map_err(|_| ApiError::BadRequest)?;
+
+    if res.rows_affected() > 0 {
+        Ok(ApiResponse::NoContent)
+    } else {
+        Err(ApiError::NotFound)
+    }
+}
