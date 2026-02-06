@@ -71,7 +71,8 @@ pub async fn create_todo(
     Ok(ApiResponse::Created)
 }
 
-pub async fn get_todos(State(state): State<AppState>) -> Result<ApiResponse, ApiError> {
+#[axum::debug_handler]
+pub async fn get_todos(State(state): State<Arc<AppState>>) -> Result<ApiResponse, ApiError> {
     let todos = sqlx::query_as!(
         Todo,
         r#"
@@ -87,7 +88,7 @@ pub async fn get_todos(State(state): State<AppState>) -> Result<ApiResponse, Api
 }
 
 pub async fn get_todo(
-    State(state): State<AppState>,
+    State(state): State<Arc<AppState>>,
     Path(id): Path<Uuid>,
 ) -> Result<ApiResponse, ApiError> {
     let todo = sqlx::query_as!(
