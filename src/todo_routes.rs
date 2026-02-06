@@ -24,14 +24,12 @@ pub struct Todo {
     pub name: String,
     pub description: Option<String>,
     pub status: Status,
-    #[serde(rename = "createdAt")]
     pub created_at: Option<DateTime<Utc>>, // DB handles this
-    #[serde(rename = "updatedAt")]
     pub updated_at: Option<DateTime<Utc>>, // DB handles this
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::Type)]
-#[sqlx(type_name = "status", rename_all = "lowercase")]
+#[sqlx(type_name = "status")]
 pub enum Status {
     Completed,  // Task completed
     InProgress, // Task in progress

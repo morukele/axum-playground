@@ -29,7 +29,7 @@ pub struct AppState {
 async fn main() {
     // read db connection string from .env file
     let db_connection_str = std::env::var("DATABASE_URL")
-        .unwrap_or_else(|_| "postgres://user:password@localhost/database".to_string());
+        .unwrap_or_else(|_| "postgres://user:password@localhost/todo".to_string());
 
     // create db connection pool
     let pool = PgPoolOptions::new()
