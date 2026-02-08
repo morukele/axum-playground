@@ -6,6 +6,7 @@ mod todo_routes;
 use crate::todo_routes::{create_todo, delete_todo, edit_todo, get_todo, get_todos};
 use axum::routing::{delete, get, post, put};
 use axum::Router;
+use dotenv::dotenv;
 use sqlx::postgres::{PgPool, PgPoolOptions};
 use std::sync::Arc;
 use tower_http::trace;
@@ -28,25 +29,32 @@ pub struct AppState {
 
 #[tokio::main]
 async fn main() {
+    // Initialize env variables
+    dotenv().ok();
+
     // Initialize tracing + log bridging
     logger::init_tracing();
 
     // read db connection string from .env file
-    let db_connection_str = std::env::var("DATABASE_URL")
-        .unwrap_or_else(|_| "postgres://user:password@localhost/todo".to_string());
+    let db_connection_str = std::env::var("DATABASE_URL").unwrap_or_else(|e| {
+        tracing::warn!("Unable to use .env config, with error : {}", e);
+        "postgres://user:password@localhost/todo".to_string()
+    });
 
     // create db connection pool
     let pool = PgPoolOptions::new()
         .max_connections(5)
         .connect(&db_connection_str)
         .await
-        .expect("can't connect to database");
+        .map_err(|e| tracing::error!("Unable to create database pool, with error: {}", e))
+        .expect("Unable to connect to the database");
 
     // migrate schema to database
     sqlx::migrate!("./migrations")
         .run(&pool)
         .await
-        .expect("unable to migrate database schema");
+        .map_err(|e| tracing::error!("Unable to migrate database, with error: {}", e))
+        .expect("Unable to migrate database schema");
 
     let app_state = Arc::new(AppState { db: pool });
 
@@ -60,7 +68,10 @@ async fn main() {
         )
         .into_make_service();
 
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
+    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000")
+        .await
+        .map_err(|e| tracing::error!("Unable to bind TCP listener, with error: {}", e))
+        .unwrap();
     tracing::info!("listening on {}", listener.local_addr().unwrap()); // structured logging
 
     axum::serve(listener, app).await.unwrap();
