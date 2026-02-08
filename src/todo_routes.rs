@@ -18,8 +18,6 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use uuid::Uuid;
 
-//TODO: implement logging for the routes
-
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
 pub struct Todo {
     pub id: Uuid, // generate on server not DB
@@ -52,7 +50,7 @@ pub async fn create_todo(
     Json(body): Json<CreateTodoObject>,
 ) -> Result<ApiResponse, ApiError> {
     // store item in db
-    sqlx::query_as!(
+    let res = sqlx::query_as!(
         Todo,
         r#"
             INSERT INTO todos (id, name, description, status)
@@ -66,14 +64,28 @@ pub async fn create_todo(
     )
     .fetch_one(&state.db)
     .await
-    .map_err(|_| ApiError::BadRequest)?;
+    .map_err(|e| {
+        tracing::error!(
+            error = %e,
+            "Unable to create todo"
+        );
+        ApiError::BadRequest
+    })?;
+
+    tracing::info!(
+        todo_id = %res.id,
+        todo_name = %res.name,
+        todo_description = %res.description.unwrap_or("".to_string()),
+        todo_created_at = %res.created_at.unwrap(),
+        "Create Todo"
+    );
 
     Ok(ApiResponse::Created)
 }
 
 #[axum::debug_handler]
 pub async fn get_todos(State(state): State<Arc<AppState>>) -> Result<ApiResponse, ApiError> {
-    let todos = sqlx::query_as!(
+    let todos: Vec<Todo> = sqlx::query_as!(
         Todo,
         r#"
             SELECT id, name, description, status AS "status!: Status", created_at, updated_at
@@ -82,7 +94,18 @@ pub async fn get_todos(State(state): State<Arc<AppState>>) -> Result<ApiResponse
     )
     .fetch_all(&state.db)
     .await
-    .map_err(|_| ApiError::NotFound)?;
+    .map_err(|e| {
+        tracing::error!(
+            error = %e,
+            "Unable to get todos"
+        );
+        ApiError::NotFound
+    })?;
+
+    tracing::info!(
+        todo_count = %todos.len(),
+        "Fetched Todos"
+    );
 
     Ok(ApiResponse::JsonData(todos))
 }
@@ -102,7 +125,20 @@ pub async fn get_todo(
     )
     .fetch_one(&state.db)
     .await
-    .map_err(|_| ApiError::NotFound)?;
+    .map_err(|e| {
+        tracing::error!(
+            error = %e,
+            "Unable to get todo"
+        );
+        ApiError::NotFound
+    })?;
+
+    tracing::info!(
+        todo_id= %&todo.id,
+        todo_name= %&todo.name,
+        todo_description= %&todo.description.as_ref().unwrap_or(&"".to_string()),
+        "Fetched todo"
+    );
 
     Ok(ApiResponse::JsonData(vec![todo]))
 }
@@ -137,11 +173,19 @@ pub async fn edit_todo(
     )
     .execute(&state.db)
     .await
-    .map_err(|_| ApiError::NotFound)?;
+    .map_err(|e| {
+        tracing::error!(
+            error = %e,
+            "Unable to edit todo"
+        );
+        ApiError::InternalServerError
+    })?;
 
     if res.rows_affected() > 0 {
+        tracing::info!("Todo with id: {}, successfully edited", id);
         Ok(ApiResponse::Ok)
     } else {
+        tracing::error!("Todo with id: {} not found", id);
         Err(ApiError::NotFound)
     }
 }
@@ -161,11 +205,19 @@ pub async fn delete_todo(
     )
     .execute(&state.db)
     .await
-    .map_err(|_| ApiError::BadRequest)?;
+    .map_err(|e| {
+        tracing::error!(
+            error = %e,
+            "Unable to delete todo"
+        );
+        ApiError::BadRequest
+    })?;
 
     if res.rows_affected() > 0 {
+        tracing::info!("Deleted todo with id: {}", id);
         Ok(ApiResponse::NoContent)
     } else {
+        tracing::error!("Unable to delete todo with id: {}", id);
         Err(ApiError::NotFound)
     }
 }

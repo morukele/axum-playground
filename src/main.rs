@@ -1,4 +1,5 @@
 mod errors;
+mod logger;
 mod response;
 mod todo_routes;
 
@@ -7,6 +8,9 @@ use axum::routing::{delete, get, post, put};
 use axum::Router;
 use sqlx::postgres::{PgPool, PgPoolOptions};
 use std::sync::Arc;
+use tower_http::trace;
+use tower_http::trace::TraceLayer;
+use tracing::Level;
 
 fn init_router(state: Arc<AppState>) -> Router {
     Router::new()
@@ -22,10 +26,11 @@ pub struct AppState {
     pub db: PgPool,
 }
 
-// TODO: implement logging for the application
-
 #[tokio::main]
 async fn main() {
+    // Initialize tracing + log bridging
+    logger::init_tracing();
+
     // read db connection string from .env file
     let db_connection_str = std::env::var("DATABASE_URL")
         .unwrap_or_else(|_| "postgres://user:password@localhost/todo".to_string());
@@ -45,9 +50,18 @@ async fn main() {
 
     let app_state = Arc::new(AppState { db: pool });
 
-    let app = Router::new().merge(init_router(app_state));
+    let app = Router::new()
+        .merge(init_router(app_state))
+        // Add a TraceLayer to automatically create and enter spans
+        .layer(
+            TraceLayer::new_for_http()
+                .make_span_with(trace::DefaultMakeSpan::new().level(Level::INFO))
+                .on_response(trace::DefaultOnResponse::new().level(Level::INFO)),
+        )
+        .into_make_service();
 
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
-    println!("listening on {}", listener.local_addr().unwrap());
+    tracing::info!("listening on {}", listener.local_addr().unwrap()); // structured logging
+
     axum::serve(listener, app).await.unwrap();
 }
