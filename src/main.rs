@@ -1,14 +1,14 @@
 mod errors;
 mod logger;
 mod response;
-mod todo_routes;
+mod routes;
 
 use crate::errors::ApiError;
 use crate::response::ApiResponse;
-use crate::todo_routes::{create_todo, delete_todo, edit_todo, get_todo, get_todos};
 use axum::routing::{delete, get, post, put};
 use axum::Router;
 use dotenv::dotenv;
+use routes::todo_routes::{create_todo, delete_todo, edit_todo, get_todo, get_todos};
 use sqlx::postgres::{PgPool, PgPoolOptions};
 use std::sync::Arc;
 use tower_http::trace;

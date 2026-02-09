@@ -8,7 +8,7 @@
 //! Description:
 //! A file containing all the response of the API route
 
-use crate::todo_routes::Todo;
+use crate::routes::todo_routes::Todo;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::Json;
