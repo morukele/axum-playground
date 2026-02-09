@@ -4,6 +4,7 @@ mod response;
 mod todo_routes;
 
 use crate::todo_routes::{create_todo, delete_todo, edit_todo, get_todo, get_todos};
+use askama::Template;
 use axum::routing::{delete, get, post, put};
 use axum::Router;
 use dotenv::dotenv;
@@ -12,6 +13,18 @@ use std::sync::Arc;
 use tower_http::trace;
 use tower_http::trace::TraceLayer;
 use tracing::Level;
+
+// Server side rendering
+#[derive(Debug, Default)]
+pub struct Context {
+    pub authed: bool,
+}
+
+#[derive(Template)]
+#[template(path = "layout.jinja")]
+pub struct HomeTemplate {
+    pub ctx: Context,
+}
 
 fn init_router(state: Arc<AppState>) -> Router {
     Router::new()
